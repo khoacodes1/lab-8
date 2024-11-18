@@ -1,14 +1,21 @@
 ---
 title: "Lab 8: Searching for Efficiency"
-author: "Your name here!"
+author: "Khoa Dang!"
 format: html
 editor: source
 embed-resources: true
+code-tools: true
+echo: true
+code-fold: true
 ---
 
-```{r}
-#| label: pacakges
+```{r, warning = FALSE}
+#| label: packages
+#| message: false
+#| warning: false
 
+library(knitr)
+library(kableExtra)
 library(tidyverse)
 ```
 
@@ -18,18 +25,19 @@ iterate over certain tasks. To do this, we will need to load in the data from
 Lab 2, Lab 3, and Lab 7. I've included **all** three datasets in the `data`
 folder, so all you need to do is read them in. 🙃 
 
-```{r}
+```{r, warning = FALSE}
 #| label: read-in-old-data
 
+
 # Data from Lab 2
-surveys <- read_csv(here::here("data", "surveys.csv"))
+surveys <- read_csv(here::here("data", "surveys.csv"), show_col_types = FALSE)
 
 # Data from Lab 3
-evals <- read_csv(here::here("data", "teacher_evals.csv")) |> 
+evals <- read_csv(here::here("data", "teacher_evals.csv"), show_col_types = FALSE) |> 
   rename(sex = gender)
 
 # Data from Lab 7
-fish <- read_csv(here::here("data", "BlackfootFish.csv"))
+fish <- read_csv(here::here("data", "BlackfootFish.csv"), show_col_types = FALSE)
 ```
 
 ## Lab 2
@@ -44,7 +52,9 @@ each variable, with the datatype of that variable immediately below it's name.
 ```{r}
 #| label: map-data-types-of-surveys
 
-
+surveys %>%
+  select(everything()) %>%
+  map_chr(typeof)
 ```
 
 ## Lab 3
@@ -62,6 +72,15 @@ list output back into a data frame.
 ```{r}
 #| label: map-to-mutate-columns
 
+transform <- evals %>%
+  rename(gender = sex) %>%
+  map_at(c("teacher_id", "weekday", "academic_degree", "seniority", "gender"), as.factor) 
+
+evals <- bind_cols(transform) 
+
+evals %>% 
+  select(c("teacher_id", "weekday", "academic_degree", "seniority", "gender")) %>%
+  str()
 
 ```
 
@@ -85,9 +104,52 @@ I'm using the `sen_level` classification from Challenge 3
 - `"senior"` = `seniority` is more than 4 
 :::
 
-```{r}
+```{r, warning = FALSE}
 #| label: double-pivot-for-summary-table
+#| message: false
+#| warning: false
 
+evals %>%
+  mutate(sen_level = if_else(
+                  as.numeric(seniority) <= 4, 
+                 "junior", 
+                 "senior"))  %>%
+  distinct(teacher_id, 
+           academic_degree, 
+           gender, 
+           sen_level, 
+           .keep_all = TRUE) %>%
+  pivot_longer(
+    cols = c(academic_degree, 
+             gender, 
+             sen_level),
+    names_to = 'column_name',
+    values_to = 'count'
+  ) %>%
+  group_by(column_name, 
+           count) %>%
+  summarize(n = n(), 
+            .groups = 'drop') %>%
+  pivot_wider(names_from = count, 
+              values_from = n,
+              values_fill = 0) %>%
+  summarize(Female = sum(female),
+            Male = sum(male),
+            `Junior (4 years or less)` = sum(junior),
+            `Senior (more than 4 years)` = sum(senior),
+            `No Degree` = sum(no_dgr),
+            Masters = sum(ma),
+            Doctorate = sum(dr),
+            Professor = sum(prof)) %>%
+  kable(
+    format = "html",
+    col.names = c("Female", "Male","Junior (4 years or less)" , "Senior (more than 4 years)", 'No Degree', 'Masters', "Doctorate", "Professor") 
+  ) %>%
+  kable_styling(
+    bootstrap_options = "condensed",
+    full_width = FALSE, 
+    position = "center" ) 
+  
 
 ```
 
@@ -110,6 +172,25 @@ Question 1 asked you to use `across()` to make a table which summarized:
 
 ```{r}
 #| label: map-missing-values-of-fish
+#| message: false
+#| warning: false
 
+
+fish %>%
+  summarize(
+    Variable = names(.), 
+    Missing_Count = map_int(., ~ sum(is.na(.)))  
+  ) %>%
+  kable(
+    format = "html",                  
+    caption = "Missing Values in Fish Data", 
+    col.names = c("Variable", "Missing Count") 
+  ) %>%
+  kable_styling(
+    full_width = FALSE,  
+    position = "center"  
+  ) 
+
+  
 
 ```
